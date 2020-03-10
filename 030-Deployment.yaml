@@ -1,0 +1,92 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: streamsheets
+  labels:
+    app: streamsheets
+    name: streamsheets
+  annotations:
+    image.openshift.io/triggers: |-
+      [
+        {
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "streamsheets:1.5"
+          },
+          "fieldPath": "spec.template.spec.initContainers[?(@.name==\"create-dirs\")].image"
+        },
+        {
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "streamsheets:1.5"
+          },
+          "fieldPath": "spec.template.spec.containers[?(@.name==\"streamsheets\")].image"
+        }
+      ]
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamsheets
+  template: 
+    metadata:
+      labels:
+        app: streamsheets
+    spec:
+      initContainers:
+        - name: create-dirs
+          image: streamsheets:1.5
+          command:
+            - bash
+            - -ec
+            - |
+              mkdir -p /var/log/mongodb
+              mkdir -p /var/log/mosquitto-default
+              mkdir -p /var/log/mosquitto
+              mkdir -p /var/log/webui
+              mkdir -p /var/log/gateway
+              mkdir -p /var/log/service-graphs
+              mkdir -p /var/log/service-machines
+              mkdir -p /var/log/service-streams
+              mkdir -p /var/log/redis
+              mkdir -p /var/log/mosquitto
+              ln -s /wait-for-database.sh supervisord/wait-for-database.sh
+              rm -f /var/lib/mongodb/mongod.lock
+          volumeMounts:
+            - name: logs
+              mountPath: /var/log
+            - name: supervisord
+              mountPath: /supervisord
+      containers:
+        - name: streamsheets
+          image: streamsheets:1.5
+          ports:
+            - containerPort: 9000
+              protocol: TCP
+              name: webui
+            - containerPort: 8081
+              protocol: TCP
+              name: gateway
+            - containerPort: 8083
+              protocol: TCP
+              name: rest
+          workingDir: /supervisord
+          command:
+            - /usr/bin/supervisord
+            - -c
+            - /etc/supervisord.conf
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mongodb
+            - name: supervisord
+              mountPath: /supervisord
+            - name: logs
+              mountPath: /var/log
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: streamsheets
+        - name: supervisord
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}

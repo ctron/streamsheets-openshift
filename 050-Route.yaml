@@ -1,0 +1,15 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: streamsheets
+  labels:
+    app: streamsheets
+spec:
+  to:
+    kind: Service
+    name: streamsheets
+  port:
+    targetPort: webui
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
